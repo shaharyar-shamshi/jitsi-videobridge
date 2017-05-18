@@ -106,6 +106,11 @@ public class BitrateController
     private static final int ONSTAGE_MIN_HEIGHT = 360;
 
     /**
+     * The min frame rate to allocate for the onstage participant.
+     */
+    private static final double ONSTAGE_MIN_FRAME_RATE = 30;
+
+    /**
      * The default value of the bandwidth change threshold above which we react
      * with a new bandwidth allocation.
      */
@@ -841,7 +846,6 @@ public class BitrateController
                 rates = new long[0];
                 targetSSRC = -1;
                 optimalIdx = -1;
-                track = null;
                 return;
             }
 
@@ -855,7 +859,6 @@ public class BitrateController
                 rates = new long[0];
                 targetSSRC = -1;
                 optimalIdx = -1;
-                track = null;
                 return;
             }
 
@@ -897,14 +900,31 @@ public class BitrateController
 
             maxQualityIdx = Math.min(maxQualityIdx, optimalIdx);
 
+            RTPEncodingDesc[] rtpEncodings = track.getRTPEncodings();
             // the targetIdx is initial equal to -1 and it is strictly
             // increasing on every allocation loop.
             for (int i = maxQualityIdx; i > targetIdx; i--)
             {
-                if (maxBps >= rates[i])
+                // No less than 30fps for the onstage participant, if possible.
+                if (maxBps >= rates[i] && (!selected
+                    || rtpEncodings[i].getFrameRate() >= ONSTAGE_MIN_FRAME_RATE))
                 {
                     targetIdx = i;
                     break;
+                }
+            }
+
+            // If we were not able to allocate a high fps stream, try again and
+            // include the low fps streams this time.
+            if (targetIdx == -1)
+            {
+                for (int i = maxQualityIdx; i > targetIdx; i--)
+                {
+                    if (maxBps >= rates[i])
+                    {
+                        targetIdx = i;
+                        break;
+                    }
                 }
             }
         }
